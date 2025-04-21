@@ -1,0 +1,119 @@
+{
+  "pois": [
+    {
+      "id": "north-pole",
+      "title": "North Pole",
+      "description": "Northern pole of Europa",
+      "location": "90°N, 0°E",
+      "lat": 90,
+      "lng": 0,
+      "type": "pole"
+    },
+    {
+      "id": "south-pole",
+      "title": "South Pole",
+      "description": "Southern pole of Europa",
+      "location": "90°S, 0°E",
+      "lat": -90,
+      "lng": 0,
+      "type": "pole"
+    },
+    {
+      "id": "ice-trenches",
+      "title": "Ice Trenches",
+      "description": "A disrupted terrain region with ridge-like features",
+      "location": "Conamara Chaos (9°N, 146°W)",
+      "lat": 9,
+      "lng": -146,
+      "type": "poi",
+      "category": "terrain"
+    },
+    {
+      "id": "cemetery",
+      "title": "Cemetery",
+      "description": "An impact site with chaotic terrain",
+      "location": "Pwyll Crater (26°S, 271°W)",
+      "lat": -26,
+      "lng": -271,
+      "type": "poi",
+      "category": "impact"
+    },
+    {
+      "id": "ice-tunnels",
+      "title": "Ice Tunnels",
+      "description": "A chaos region suggesting subsurface activity",
+      "location": "Thera Macula (48°S, 181°W)",
+      "lat": -48,
+      "lng": -181,
+      "type": "poi",
+      "category": "terrain"
+    },
+    {
+      "id": "crash-site",
+      "title": "Crash Site",
+      "description": "A multi-ring impact structure with fractured ice",
+      "location": "Callanish Crater (17°S, 334°W)",
+      "lat": -17,
+      "lng": -334,
+      "type": "poi",
+      "category": "impact"
+    },
+    {
+      "id": "charons-crossing",
+      "title": "Charon's Crossing",
+      "description": "A flat, smooth region suitable for an outpost",
+      "location": "Argadnel Regio (10°N, 220°E)",
+      "lat": 10,
+      "lng": 220,
+      "type": "poi",
+      "category": "landmark"
+    },
+    {
+      "id": "equator-0",
+      "title": "Equator 0°",
+      "description": "Prime meridian at equator",
+      "location": "0°N, 0°E",
+      "lat": 0,
+      "lng": 0,
+      "type": "orientation"
+    },
+    {
+      "id": "equator-90e",
+      "title": "Equator 90°E",
+      "description": "Eastern point on equator",
+      "location": "0°N, 90°E",
+      "lat": 0,
+      "lng": 90,
+      "type": "orientation"
+    },
+    {
+      "id": "equator-180",
+      "title": "Equator 180°",
+      "description": "Anti-meridian at equator",
+      "location": "0°N, 180°E",
+      "lat": 0,
+      "lng": 180,
+      "type": "orientation"
+    },
+    {
+      "id": "equator-90w",
+      "title": "Equator 90°W",
+      "description": "Western point on equator",
+      "location": "0°N, 270°E",
+      "lat": 0,
+      "lng": 270,
+      "type": "orientation"
+    },
+    {
+      "id": "north-45",
+      "title": "45°N",
+      "description": "Northern hemisphere reference",
+      "location": "45°N, 0°E",
+      "lat": 45,
+      "lng": 0,
+      "type": "orientation"
+    }
+  ],
+  "version": "1.0.0",
+  "lastUpdated": "2025-04-21"
+} 

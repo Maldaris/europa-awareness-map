@@ -4,7 +4,9 @@ import { RepeatWrapping } from 'three';
 import { Sphere, Billboard, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { ThreeEvent } from '@react-three/fiber';
-import { latLongToVector3 } from './utils';
+import { latLongToVector3, vectorToLatLong } from './utils';
+import { usePOIs } from '../../context/POIContext';
+import { POI } from '../../types';
 
 // Import the extracted components
 import GridLines from './components/GridLines';
@@ -26,6 +28,14 @@ const JUPITER_SCALE_FACTOR = 46;
 // For visualization, we'll use a scaled distance that works for the scene
 const JUPITER_DISTANCE = 100; // Scaled distance for visual purposes
 
+// Custom marker type
+interface CustomMarker {
+    id: string;
+    normalizedPosition: THREE.Vector3;
+    title: string;
+    description: string;
+}
+
 // Debounce helper function
 const debounce = <T extends (...args: any[]) => any>(fn: T, ms = 50) => {
     let timeoutId: ReturnType<typeof setTimeout>;
@@ -45,54 +55,51 @@ interface EuropaSphereProps {
     };
     isMarkerMode?: boolean;
     onMarkerPlaced?: (lat: number, long: number) => void;
+    terrainHeight?: number; // Control the terrain elevation scale
 }
 
 // Main Europa Sphere Component
 const EuropaSphere = React.forwardRef<
-    { addMarker: (lat: number, long: number, title: string, description: string) => void },
+    { addMarker: (lat: number, long: number, title: string, description: string, category: string) => void },
     EuropaSphereProps
 >(({
     layerVisibility = { gridLines: true, equator: true, poles: true, poi: true, orientationMarkers: true },
     isMarkerMode = false,
-    onMarkerPlaced
+    onMarkerPlaced,
+    terrainHeight = 0.5
 }, ref) => {
     // Reference to the mesh for animations and raycasting
     const meshRef = useRef<THREE.Mesh>(null);
     const radius = 1;
+    
+    // Access the POI context
+    const { pois, isLoading: poisLoading, addPOI, getDirectionVector } = usePOIs();
 
     const { camera, gl, invalidate } = useThree();
-
-    // State to track if context is lost
-    const [contextLost, setContextLost] = useState(false);
-
-    // State to track if user has interacted with orbit controls
-    const [userHasInteracted, setUserHasInteracted] = useState(false);
-
     // State for marker scale (calculated once for all markers)
     const [markerScale, setMarkerScale] = useState(MAX_MARKER_SIZE);
+
+    // State for displacement scale (for terrain height adjustment)
+    const [displacementScale, setDisplacementScale] = useState(terrainHeight);
 
     // State to track intersection point
     const [intersectionPoint, setIntersectionPoint] = useState<THREE.Vector3 | null>(null);
 
-    // State to track current mouse position
-    const [mousePos, setMousePos] = useState<{ x: number, y: number } | null>(null);
+    // State for custom markers
+    const [customMarkers, setCustomMarkers] = useState<CustomMarker[]>([]);
 
-    // State to track if calculation is needed
-    const [needsCalculation, setNeedsCalculation] = useState(false);
+    const canvasDomElement = useRef<HTMLCanvasElement | null>(null);
 
-    // Debounced mouse position setter
-    const debouncedSetMousePos = useMemo(() =>
-        debounce((x: number, y: number) => {
-            setMousePos({ x, y });
-            setNeedsCalculation(true);
-        }, 5)
-        , [setMousePos, setNeedsCalculation]);
+    useEffect(() => {
+        const canvas = gl.domElement;
+        canvasDomElement.current = canvas;
+    }, [gl]);
 
     // Use useMemo for texture loading to prevent reloads
-    const texture = useMemo(() => {
+    const textures = useMemo(() => {
         console.log('Europa texture loading');
 
-        const tex = new THREE.TextureLoader().load('/textures/Dh_europa_texture.webp', (loadedTexture) => {
+        const colorTex = new THREE.TextureLoader().load('/textures/Dh_europa_texture.webp', (loadedTexture) => {
             // Configure texture when loaded
             loadedTexture.colorSpace = THREE.SRGBColorSpace;
             loadedTexture.wrapS = RepeatWrapping;
@@ -100,203 +107,175 @@ const EuropaSphere = React.forwardRef<
 
             // Force a re-render after texture is loaded
             invalidate();
-            console.log('Texture loaded and configured');
+            console.log('Color texture loaded and configured');
         });
 
-        return tex;
+        // Load heightmap texture for displacement
+        const heightmapTex = new THREE.TextureLoader().load('/resources/europa-heightmap.jpg', (loadedTexture) => {
+            // Configure heightmap texture
+            loadedTexture.wrapS = RepeatWrapping;
+            loadedTexture.wrapT = RepeatWrapping;
+            
+            // Force a re-render after texture is loaded
+            invalidate();
+            console.log('Heightmap texture loaded and configured');
+        });
+
+        return { colorTex, heightmapTex };
     }, [invalidate]); // Only depend on invalidate function
 
-    // Pre-calculate pole and POI positions
-    const positions = useMemo(() => ({
-        // Orientation markers
-        northPole: latLongToVector3(90, 0, radius),
-        southPole: latLongToVector3(-90, 0, radius),
-        origin: latLongToVector3(0, 0, radius),          // Prime meridian at equator
-        east90: latLongToVector3(0, 90, radius),         // 90°E at equator
-        west90: latLongToVector3(0, -90, radius),        // 90°W at equator
-        antiMeridian: latLongToVector3(0, 180, radius),  // 180° at equator
-        northeast: latLongToVector3(45, 45, radius),     // 45°N, 45°E
-        southwest: latLongToVector3(-45, -45, radius),   // 45°S, 45°W
+    // Filter POIs by type
+    const filteredPOIs = useMemo(() => {
+        if (poisLoading) return { poles: [], orientationMarkers: [], pois: [] };
+        
+        return {
+            poles: pois.filter(poi => poi.type === 'pole'),
+            orientationMarkers: pois.filter(poi => poi.type === 'orientation'),
+            pois: pois.filter(poi => poi.type === 'poi' || poi.type === 'custom')
+        };
+    }, [pois, poisLoading]);
 
-        // Europa Forever War locations
-        iceTrenches: latLongToVector3(9, -146, radius),     // Conamara Chaos - Ice Trenches
-        cemetery: latLongToVector3(-26, -271, radius),      // Pwyll Crater - Cemetery
-        iceTunnels: latLongToVector3(-48, -181, radius),    // Thera Macula - Ice Tunnels
-        crashSite: latLongToVector3(-17, -334, radius),     // Callanish Crater - Crash Site
-        charonsCrossing: latLongToVector3(10, 220, radius),  // Argadnel Regio - Charon's Crossing (approximate)
-        equator0: latLongToVector3(0, 0, radius),
-        equator90E: latLongToVector3(0, 90, radius),
-        equator180: latLongToVector3(0, 180, radius),
-        equator90W: latLongToVector3(0, 270, radius),
-        north45: latLongToVector3(45, 0, radius)
-    }), [radius]);
+    // Calculate intersection point when needed
+    const calculateIntersection = useCallback((mouseX: number, mouseY: number) => {
+        if (!meshRef.current) return null;
+        
+        // Get the canvas dimensions
 
-    useEffect(() => {
-        if (needsCalculation) {
-            // Only perform calculation if mouse position is available
-            if (!mousePos || !meshRef.current) return;
+
+        if (!canvasDomElement.current) return null;
+        
+        const canvas = canvasDomElement.current;
+        const rect = canvasDomElement.current?.getBoundingClientRect();
+
+        // Account for device pixel ratio and scroll position
+        // Get the pixel ratio of the device (for high-DPI screens)
+        const pixelRatio = window.devicePixelRatio || 1;
+        
+        // Get the canvas's actual rendering size (may differ from CSS size)
+        const canvasWidth = canvas.width / pixelRatio;
+        const canvasHeight = canvas.height / pixelRatio;
+        
+        // Calculate ratio between canvas CSS size and actual rendering size
+        const widthRatio = rect.width / canvasWidth;
+        const heightRatio = rect.height / canvasHeight;
+        
+        // Calculate correct mouse position relative to canvas
+        // Adjust for scroll position, canvas position, and any scaling
+        const x = ((mouseX - rect.left) / widthRatio);
+        const y = ((mouseY - rect.top) / heightRatio);
+        
+        // Calculate normalized device coordinates (-1 to +1) taking into account pixel ratio
+        // Use the actual rendering size of the canvas for this calculation
+        const ndcX = (x / canvasWidth) * 2 - 1;
+        const ndcY = -(y / canvasHeight) * 2 + 1;
+        
+        // Get sphere position in world space
+        const spherePosition = new THREE.Vector3();
+        meshRef.current.getWorldPosition(spherePosition);
+        
+        // Use raycaster for more reliable ray calculation
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
+        
+        // The raycaster origin is the camera position
+        const rayOrigin = raycaster.ray.origin.clone();
+        // The direction is already normalized
+        const rayDirection = raycaster.ray.direction.clone();
+        
+        // Vector from sphere center to ray origin (this is the correct vector for the formula)
+        const centerToOrigin = rayOrigin.clone().sub(spherePosition);
+        
+        // Coefficients of quadratic equation - using standard ray-sphere intersection formula
+        const a = rayDirection.dot(rayDirection); // Always 1 for normalized direction
+        const b = 2 * centerToOrigin.dot(rayDirection);
+        const c = centerToOrigin.dot(centerToOrigin) - radius * radius;
+        
+        // Calculate discriminant
+        const discriminant = b * b - 4 * a * c;
+        
+        if (discriminant >= 0) {
+            // Ray intersects sphere
+            // Calculate both intersection points
+            const t1 = (-b - Math.sqrt(discriminant)) / (2 * a);
+            const t2 = (-b + Math.sqrt(discriminant)) / (2 * a);
             
-            // Get the canvas dimensions
-            const canvas = gl.domElement;
-            const rect = canvas.getBoundingClientRect();
+            // Select the appropriate t value
+            // For a camera outside the sphere looking at it:
+            // - The smaller positive t is the entry point (front)
+            // - The larger positive t is the exit point (back)
             
-            // Create normalized device coordinates (-1 to 1)
-            const ndcX = ((mousePos.x - rect.left) / rect.width) * 2 - 1;
-            const ndcY = -((mousePos.y - rect.top) / rect.height) * 2 + 1;
-            
-            // Get sphere position in world space
-            const spherePosition = new THREE.Vector3();
-            meshRef.current.getWorldPosition(spherePosition);
-            
-            // Use raycaster for more reliable ray calculation
-            const raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
-            
-            // The raycaster origin is the camera position
-            const rayOrigin = raycaster.ray.origin.clone();
-            // The direction is already normalized
-            const rayDirection = raycaster.ray.direction.clone();
-            
-            // Ray-sphere intersection calculation
-            // For a ray p(t) = rayOrigin + t*rayDir and a sphere with center spherePos and radius r:
-            // We need to solve |p(t) - spherePos|^2 = r^2
-            
-            // Vector from sphere center to ray origin (this is the correct vector for the formula)
-            const centerToOrigin = rayOrigin.clone().sub(spherePosition);
-            
-            // Coefficients of quadratic equation - using standard ray-sphere intersection formula
-            const a = rayDirection.dot(rayDirection); // Always 1 for normalized direction
-            const b = 2 * centerToOrigin.dot(rayDirection);
-            const c = centerToOrigin.dot(centerToOrigin) - radius * radius;
-            
-            // Calculate discriminant
-            const discriminant = b * b - 4 * a * c;
-            
-            // Dump calculation state
-            console.log("Ray-sphere intersection calculation state:", JSON.stringify({
-                rayOrigin: rayOrigin.toArray(),
-                rayDirection: rayDirection.toArray(),
-                spherePosition: spherePosition.toArray(),
-                radius,
-                centerToOrigin: centerToOrigin.toArray(),
-                a,
-                b, 
-                c,
-                discriminant
-            }, null, 2));
-            
-            if (discriminant >= 0) {
-                // Ray intersects sphere
-                // Calculate both intersection points
-                const t1 = (-b - Math.sqrt(discriminant)) / (2 * a);
-                const t2 = (-b + Math.sqrt(discriminant)) / (2 * a);
-                
-                console.log("t1", t1);
-                console.log("t2", t2);
-                
-                // Based on our diagnostics, we need to flip our logic:
-                // When both t values are negative, use the less negative one (closest to zero)
-                let t = Math.min(t1, t2);
-                console.log("t selected", t);
-                
-                // Calculate the intersection point in world space
-                const intersectionPoint = rayOrigin.clone().add(rayDirection.clone().multiplyScalar(t));
-                
-                // Calculate normal at intersection (direction from sphere center to intersection)
-                const normal = intersectionPoint.clone().sub(spherePosition).normalize();
-                
-                // Final position is exactly on the sphere surface
-                const finalPosition = spherePosition.clone().add(normal.multiplyScalar(radius));
-                
-                console.log("finalPosition", finalPosition);
-                console.log("normal", normal);
-                
-                setIntersectionPoint(finalPosition);
+            // Choose proper t value - select front intersection if both are positive
+            let t;
+            if (t1 > 0 && t2 > 0) {
+                // Both are positive, camera is outside sphere
+                t = Math.min(t1, t2); // Choose the closer (front) intersection
+            } else if (t1 > 0) {
+                // Only t1 is positive
+                t = t1;
+            } else if (t2 > 0) {
+                // Only t2 is positive
+                t = t2;
             } else {
-                setIntersectionPoint(null);
+                // Both negative, no valid intersection
+                return null;
             }
             
-            // Reset the calculation flag
-            setNeedsCalculation(false);
+            // Calculate the intersection point in world space
+            const intersectionPoint = rayOrigin.clone().add(rayDirection.clone().multiplyScalar(t));
+            
+            // Calculate normal at intersection (direction from sphere center to intersection)
+            const normal = intersectionPoint.clone().sub(spherePosition).normalize();
+            
+            // Final position is exactly on the sphere surface
+            const finalPosition = spherePosition.clone().add(normal.multiplyScalar(radius));
+            
+            return {
+                position: finalPosition,
+                normal: normal,
+                normalizedPosition: normal.clone()
+            };
         }
-    }, [camera, gl.domElement, mousePos, needsCalculation, radius]);
+        
+        return null;
+    }, [camera, canvasDomElement, radius]);
 
     // Handle pointer movement - only update the mouse position, actual calculation happens in useAnimationFrame
     const handlePointerMove = useCallback((event: ThreeEvent<PointerEvent>) => {
         if (!meshRef.current) return;
-        debouncedSetMousePos(event.clientX, event.clientY);
-    }, [debouncedSetMousePos]);
-
-    // Handle WebGL context loss and restoration with forced context restore
-    useEffect(() => {
-        const canvas = gl.domElement;
-        const renderer = gl;
-
-        const handleContextLost = (event: Event) => {
-            event.preventDefault(); // Critical to allow context restoration
-            console.log('WebGL context lost - attempting to restore...');
-            setContextLost(true);
-
-            // Force context restoration after a small timeout
-            setTimeout(() => {
-                try {
-                    // @ts-ignore - forceContextRestore is not in the type definitions but exists in THREE
-                    renderer.forceContextRestore();
-                    console.log('Context restore forced');
-                } catch (e) {
-                    console.error('Failed to force context restore:', e);
-                }
-            }, 10);
-        };
-
-        const handleContextRestored = () => {
-            console.log('WebGL context restored');
-            setContextLost(false);
-
-            // Force scene to update on context restoration
+        const intersection = calculateIntersection(event.clientX, event.clientY);
+        if (intersection) {
+            setIntersectionPoint(intersection.position);
             invalidate();
+        } else {
+            setIntersectionPoint(null);
+        }
+    }, [calculateIntersection, invalidate]);
 
-            // Re-apply texture if we have it stored
-            if (texture && meshRef.current) {
-                const material = meshRef.current.material as THREE.MeshStandardMaterial;
-                if (material) {
-                    material.map = texture;
-                    material.needsUpdate = true;
-                }
-            }
-        };
+    // Handle click on the sphere to place a marker
+    const handlePointerDown = useCallback((event: ThreeEvent<PointerEvent>) => {
+        if (!isMarkerMode || !meshRef.current) return;
+        
+        // Calculate intersection
+        const intersection = calculateIntersection(event.clientX, event.clientY);
+        if (!intersection) return;
+        
+        // Get lat/long from the normalized position
+        const { lat, long } = vectorToLatLong(intersection.normalizedPosition, 1);
+        
+        // Call the callback with the lat/long
+        if (onMarkerPlaced) {
+            onMarkerPlaced(lat, long);
+            
+            // Dispatch marker selected event
+            const markerSelectedEvent = new Event('marker-selected');
+            window.dispatchEvent(markerSelectedEvent);
+        }
+    }, [isMarkerMode, calculateIntersection, onMarkerPlaced]);
 
-        canvas.addEventListener('webglcontextlost', handleContextLost);
-        canvas.addEventListener('webglcontextrestored', handleContextRestored);
-
-        return () => {
-            canvas.removeEventListener('webglcontextlost', handleContextLost);
-            canvas.removeEventListener('webglcontextrestored', handleContextRestored);
-        };
-    }, [gl, invalidate, texture]);
-
-    // Force the scene to re-render periodically if we're in a problematic state
+    // Update displacement scale when terrainHeight prop changes
     useEffect(() => {
-        if (contextLost) {
-            const interval = setInterval(() => {
-                invalidate();
-            }, 500);
-
-            return () => clearInterval(interval);
-        }
-    }, [contextLost, invalidate]);
-
-    // Optimize rotation animation: slower rotation and skip if context is lost
-    useFrame((_, delta) => {
-        if (meshRef.current && !isMarkerMode && !contextLost && !userHasInteracted) {
-            // Use time delta for smoother animation independent of frame rate
-            meshRef.current.rotation.y += 0.1 * delta;
-
-            // Force scene update
-            invalidate();
-        }
-    });
-
+        setDisplacementScale(terrainHeight);
+    }, [terrainHeight]);
     // Calculate marker scale based on camera distance to center of sphere
     useFrame(({ camera }) => {
         if (!meshRef.current) return;
@@ -320,81 +299,33 @@ const EuropaSphere = React.forwardRef<
         setMarkerScale(scale);
     });
 
-    // Simple stub for addMarker - this will be properly implemented later
-    const addMarker = useCallback((lat: number, long: number, title: string, description: string) => {
-        console.log(`Stub: Would add marker at ${lat}°, ${long}° with title "${title}"`);
-        // No-op for now - will be implemented in future
-    }, []);
+    const addMarker = useCallback((lat: number, long: number, title: string, description: string, category: string = 'user') => {
+        console.log(`Adding marker at ${lat}°, ${long}° with title "${title}" and category "${category}"`);
+        
+        // Determine if this should be a special type or a regular POI based on category
+        let poiType: 'poi' | 'orientation' | 'pole' | 'custom' = 'poi';
+        
+        // Map specific categories to types if needed
+        if (category === 'orientation') {
+            poiType = 'orientation';
+        } else if (category === 'custom' || category === 'user') {
+            poiType = 'custom';
+        }
+        
+        addPOI({
+            title,
+            description,
+            lat,
+            lng: long,
+            type: poiType,
+            category: category
+        });
+    }, [addPOI]);
 
     // Expose addMarker function to parent component
     React.useImperativeHandle(ref, () => ({
         addMarker
     }));
-
-    // Add a listener for orbit control interaction
-    useEffect(() => {
-        const handleOrbitStart = () => {
-            setUserHasInteracted(true);
-            console.log('User interacted with orbit controls, auto-rotation disabled');
-        };
-
-        // Listen for control events from orbit controls
-        window.addEventListener('orbit-controls-change', handleOrbitStart);
-
-        // Also listen for pointerdown/mousedown events on the canvas as a fallback
-        const canvas = gl.domElement;
-        const handlePointerDown = (e: PointerEvent) => {
-            if (e.button === 1 || e.button === 2) {
-                setUserHasInteracted(true);
-                console.log('User right-clicked or middle-clicked, auto-rotation disabled');
-            }
-        };
-
-        // Handle wheel events for zooming
-        const handleWheel = () => {
-            setUserHasInteracted(true);
-            console.log('User zoomed with wheel, auto-rotation disabled');
-        };
-
-        // Handle touch events for mobile users
-        const handleTouch = (e: TouchEvent) => {
-            // If it's a multi-touch gesture (pinch/zoom or rotation)
-            if (e.touches.length > 1) {
-                setUserHasInteracted(true);
-                console.log('User performed multi-touch gesture, auto-rotation disabled');
-            }
-        };
-
-        canvas.addEventListener('pointerdown', handlePointerDown);
-        canvas.addEventListener('wheel', handleWheel);
-        canvas.addEventListener('touchstart', handleTouch);
-
-        return () => {
-            window.removeEventListener('orbit-controls-change', handleOrbitStart);
-            canvas.removeEventListener('pointerdown', handlePointerDown);
-            canvas.removeEventListener('wheel', handleWheel);
-            canvas.removeEventListener('touchstart', handleTouch);
-        };
-    }, [gl]);
-
-    // Display a message if context is lost
-    if (contextLost) {
-        return (
-            <group>
-                <Billboard>
-                    <Text
-                        position={[0, 0, 0]}
-                        fontSize={0.2}
-                        color="red"
-                        anchorX="center"
-                        anchorY="middle"
-                    >
-                        WebGL context lost. Please reload the page.
-                    </Text>
-                </Billboard>
-            </group>
-        );
-    }
 
     return (
         <>
@@ -415,14 +346,19 @@ const EuropaSphere = React.forwardRef<
                 <mesh
                     ref={meshRef}
                     onPointerMove={handlePointerMove}
+                    onPointerDown={handlePointerDown}
                 >
-                    <Sphere args={[radius, 48, 48]}>
+                    <Sphere args={[radius, 64, 32]}>
                         <meshStandardMaterial
-                            map={texture}
-                            metalness={0.1}
-                            roughness={0.7}
+                            map={textures.colorTex}
+                            metalness={0.2}
+                            roughness={0.8}
                             emissive="#444444"
                             emissiveIntensity={0.1}
+                            displacementMap={textures.heightmapTex}
+                            displacementScale={displacementScale}
+                            bumpMap={textures.heightmapTex}
+                            bumpScale={0.05}
                         />
                     </Sphere>
 
@@ -432,158 +368,68 @@ const EuropaSphere = React.forwardRef<
                     )}
 
                     {/* Poles */}
-                    {layerVisibility.poles && (
-                        <>
+                    {layerVisibility.poles && !poisLoading && 
+                        filteredPOIs.poles.map(poi => (
                             <PoleMarker
-                                directionVector={positions.northPole.clone().normalize()}
+                                key={poi.id}
+                                directionVector={getDirectionVector(poi, radius)}
                                 label={{
-                                    title: "North Pole",
-                                    location: "90°N, 0°E"
+                                    title: poi.title,
+                                    location: poi.location
                                 }}
                                 sphereRef={meshRef as any}
                                 scale={markerScale}
                                 radius={radius}
                             />
-                            <PoleMarker
-                                directionVector={positions.southPole.clone().normalize()}
-                                label={{
-                                    title: "South Pole",
-                                    location: "90°S, 0°E"
-                                }}
-                                sphereRef={meshRef as any}
-                                scale={markerScale}
-                                radius={radius}
-                            />
-                        </>
-                    )}
+                        ))
+                    }
 
                     {/* POI markers */}
-                    {layerVisibility.poi && (
-                        <>
+                    {layerVisibility.poi && !poisLoading && 
+                        filteredPOIs.pois.map(poi => (
                             <POIMarker
-                                directionVector={positions.iceTrenches.clone().normalize()}
+                                key={poi.id}
+                                directionVector={getDirectionVector(poi, radius)}
                                 label={{
-                                    title: "Ice Trenches",
-                                    description: "A disrupted terrain region with ridge-like features",
-                                    location: "Conamara Chaos (9°N, 146°W)"
+                                    title: poi.title,
+                                    description: poi.description,
+                                    location: poi.location
                                 }}
+                                category={poi.category}
                                 sphereRef={meshRef as any}
                                 scale={markerScale}
                                 radius={radius}
                             />
-                            <POIMarker
-                                directionVector={positions.cemetery.clone().normalize()}
-                                label={{
-                                    title: "Cemetery",
-                                    description: "An impact site with chaotic terrain",
-                                    location: "Pwyll Crater (26°S, 271°W)"
-                                }}
-                                sphereRef={meshRef as any}
-                                scale={markerScale}
-                                radius={radius}
-                            />
-                            <POIMarker
-                                directionVector={positions.iceTunnels.clone().normalize()}
-                                label={{
-                                    title: "Ice Tunnels",
-                                    description: "A chaos region suggesting subsurface activity",
-                                    location: "Thera Macula (48°S, 181°W)"
-                                }}
-                                sphereRef={meshRef as any}
-                                scale={markerScale}
-                                radius={radius}
-                            />
-                            <POIMarker
-                                directionVector={positions.crashSite.clone().normalize()}
-                                label={{
-                                    title: "Crash Site",
-                                    description: "A multi-ring impact structure with fractured ice",
-                                    location: "Callanish Crater (17°S, 334°W)"
-                                }}
-                                sphereRef={meshRef as any}
-                                scale={markerScale}
-                                radius={radius}
-                            />
-                            <POIMarker
-                                directionVector={positions.charonsCrossing.clone().normalize()}
-                                label={{
-                                    title: "Charon's Crossing",
-                                    description: "A flat, smooth region suitable for an outpost",
-                                    location: "Argadnel Regio (10°N, 220°E)"
-                                }}
-                                sphereRef={meshRef as any}
-                                scale={markerScale}
-                                radius={radius}
-                            />
+                        ))
+                    }
 
-                            {/* Orientation markers */}
-                            {layerVisibility.orientationMarkers && (
-                                <>
-                                    <POIMarker
-                                        directionVector={positions.equator0.clone().normalize()}
-                                        label={{
-                                            title: "Equator 0°",
-                                            location: "0°N, 0°E",
-                                            description: "Prime meridian at equator"
-                                        }}
-                                        sphereRef={meshRef as any}
-                                        scale={markerScale}
-                                        radius={radius}
-                                    />
-                                    <POIMarker
-                                        directionVector={positions.equator90E.clone().normalize()}
-                                        label={{
-                                            title: "Equator 90°E",
-                                            location: "0°N, 90°E",
-                                            description: "Eastern point on equator"
-                                        }}
-                                        sphereRef={meshRef as any}
-                                        scale={markerScale}
-                                        radius={radius}
-                                    />
-                                    <POIMarker
-                                        directionVector={positions.equator180.clone().normalize()}
-                                        label={{
-                                            title: "Equator 180°",
-                                            location: "0°N, 180°E",
-                                            description: "Anti-meridian at equator"
-                                        }}
-                                        sphereRef={meshRef as any}
-                                        scale={markerScale}
-                                        radius={radius}
-                                    />
-                                    <POIMarker
-                                        directionVector={positions.equator90W.clone().normalize()}
-                                        label={{
-                                            title: "Equator 90°W",
-                                            location: "0°N, 270°E",
-                                            description: "Western point on equator"
-                                        }}
-                                        sphereRef={meshRef as any}
-                                        scale={markerScale}
-                                        radius={radius}
-                                    />
-                                    <POIMarker
-                                        directionVector={positions.north45.clone().normalize()}
-                                        label={{
-                                            title: "45°N",
-                                            location: "45°N, 0°E",
-                                            description: "Northern hemisphere reference"
-                                        }}
-                                        sphereRef={meshRef as any}
-                                        scale={markerScale}
-                                        radius={radius}
-                                    />
-                                </>
-                            )}
-                        </>
-                    )}
+                    {/* User created custom markers */}
+                    {customMarkers.map(marker => (
+                        <POIMarker
+                            key={marker.id}
+                            directionVector={marker.normalizedPosition}
+                            label={{
+                                title: marker.title,
+                                description: marker.description
+                            }}
+                            category="custom"
+                            sphereRef={meshRef as any}
+                            scale={markerScale}
+                            radius={radius}
+                        />
+                    ))}
 
-                    {/* Intersection point indicator */}
-                    {intersectionPoint && (
-                        <mesh position={intersectionPoint}>
+                    {/* Intersection point indicator - only show when in marker placement mode */}
+                    {intersectionPoint && isMarkerMode && (
+                        <mesh position={intersectionPoint} renderOrder={1000}>
                             <sphereGeometry args={[0.02, 16, 16]} />
-                            <meshBasicMaterial color="#00ff00" transparent={true} opacity={0.8} depthTest={false} />
+                            <meshBasicMaterial 
+                                color="#00ff00" 
+                                transparent={true} 
+                                opacity={0.8} 
+                                depthTest={false}
+                                side={THREE.DoubleSide}
+                            />
                         </mesh>
                     )}
                 </mesh>

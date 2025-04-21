@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import '../styles/UIOverlay.css';
+import { MarkerCategory, MarkerCategoryLabels } from '../types';
 
 interface UIOverlayProps {
   layerVisibility: {
@@ -11,7 +12,7 @@ interface UIOverlayProps {
   onLayerToggle: (layer: string, visible: boolean) => void;
   onMarkerModeToggle: () => void;
   isMarkerMode: boolean;
-  onCreateMarker: (title: string, description: string) => void;
+  onCreateMarker: (title: string, description: string, category: string) => void;
 }
 
 const UIOverlay: React.FC<UIOverlayProps> = ({
@@ -24,6 +25,22 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newMarkerTitle, setNewMarkerTitle] = useState('');
   const [newMarkerDescription, setNewMarkerDescription] = useState('');
+  const [newMarkerCategory, setNewMarkerCategory] = useState<string>(MarkerCategory.LANDMARK);
+
+  // Define which categories to show in the dropdown
+  const visibleCategories = useMemo(() => {
+    // Filter out USER and ORIENTATION, keep other categories
+    return Object.entries(MarkerCategoryLabels)
+      .filter(([key]) => 
+        key !== MarkerCategory.USER && 
+        key !== MarkerCategory.ORIENTATION
+      )
+      .map(([key, value]) => ({
+        value: key,
+        // Change "Custom Marker" label to "Other"
+        label: key === MarkerCategory.CUSTOM ? 'Other' : value
+      }));
+  }, []);
 
   // Open modal when marker data is available
   useEffect(() => {
@@ -48,9 +65,10 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
   const handleMarkerSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (newMarkerTitle.trim()) {
-      onCreateMarker(newMarkerTitle, newMarkerDescription);
+      onCreateMarker(newMarkerTitle, newMarkerDescription, newMarkerCategory);
       setNewMarkerTitle('');
       setNewMarkerDescription('');
+      setNewMarkerCategory(MarkerCategory.LANDMARK);
       setIsModalOpen(false);
     }
   };
@@ -147,6 +165,21 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
                   onChange={(e) => setNewMarkerDescription(e.target.value)}
                   rows={4}
                 ></textarea>
+              </div>
+              <div className="form-group">
+                <label htmlFor="markerCategory">Category</label>
+                <select
+                  id="markerCategory"
+                  value={newMarkerCategory}
+                  onChange={(e) => setNewMarkerCategory(e.target.value)}
+                  required
+                >
+                  {visibleCategories.map(({ value, label }) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="form-buttons">
                 <button type="button" onClick={handleCancelMarker}>

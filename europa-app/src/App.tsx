@@ -5,6 +5,7 @@ import EuropaSphere from './components/EuropaSphere';
 import LoadingScreen from './components/LoadingScreen';
 import UIOverlay from './components/UIOverlay';
 import StableCanvas from './components/StableCanvas';
+import { POIProvider } from './context/POIContext';
 
 // Memoized Canvas component to prevent unnecessary re-renders - now using our stable version
 const MemoizedCanvas = memo(({ children, ...props }: any) => (
@@ -13,7 +14,7 @@ const MemoizedCanvas = memo(({ children, ...props }: any) => (
 
 // Define type for the Europa sphere ref
 type EuropaSphereRef = { 
-  addMarker: (lat: number, long: number, title: string, description: string) => void 
+  addMarker: (lat: number, long: number, title: string, description: string, category: string) => void 
 } | null;
 
 // Define type for SceneContent props
@@ -134,10 +135,10 @@ function App() {
   }, []);
   
   // Create a new marker - memoized with useCallback
-  const createMarker = useCallback((title: string, description: string) => {
+  const createMarker = useCallback((title: string, description: string, category: string) => {
     if (markerModalData && europaSphereRef.current) {
       const { lat, long } = markerModalData;
-      europaSphereRef.current.addMarker(lat, long, title, description);
+      europaSphereRef.current.addMarker(lat, long, title, description, category);
       setMarkerModalData(null);
       setIsMarkerMode(false);
       setShowModal(false);
@@ -187,31 +188,33 @@ function App() {
   ), [layerVisibility, isMarkerMode, handleMarkerPlaced, canvasProps]);
 
   return (
-    <div className="App">
-      <div className="title">Europa 3D Explorer</div>
-      {memoizedCanvas}
-      
-      <UIOverlay
-        layerVisibility={layerVisibility}
-        onLayerToggle={handleLayerToggle}
-        isMarkerMode={isMarkerMode}
-        onMarkerModeToggle={toggleMarkerMode}
-        onCreateMarker={createMarker}
-      />
-      
-      {/* Marker position information display */}
-      {markerModalData && isMarkerMode && !showModal && (
-        <div className="marker-info">
-          Selected position: {markerModalData.lat.toFixed(2)}°, {markerModalData.long.toFixed(2)}°
-          <button 
-            onClick={() => setShowModal(true)}
-            style={{ marginLeft: '10px', padding: '3px 8px' }}
-          >
-            Add Marker
-          </button>
-        </div>
-      )}
-    </div>
+    <POIProvider>
+      <div className="App">
+        <div className="title">Europa Conflict Awareness Map</div>
+        {memoizedCanvas}
+        
+        <UIOverlay
+          layerVisibility={layerVisibility}
+          onLayerToggle={handleLayerToggle}
+          isMarkerMode={isMarkerMode}
+          onMarkerModeToggle={toggleMarkerMode}
+          onCreateMarker={createMarker}
+        />
+        
+        {/* Marker position information display */}
+        {markerModalData && isMarkerMode && !showModal && (
+          <div className="marker-info">
+            Selected position: {markerModalData.lat.toFixed(2)}°, {markerModalData.long.toFixed(2)}°
+            <button 
+              onClick={() => setShowModal(true)}
+              style={{ marginLeft: '10px', padding: '3px 8px' }}
+            >
+              Add Marker
+            </button>
+          </div>
+        )}
+      </div>
+    </POIProvider>
   );
 }
 
