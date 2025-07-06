@@ -8,6 +8,7 @@ interface UIOverlayProps {
     equator: boolean;
     poles: boolean;
     poi: boolean;
+    voronoi?: boolean;
   };
   onLayerToggle: (layer: string, visible: boolean) => void;
   onMarkerModeToggle: () => void;
@@ -122,6 +123,16 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
               onChange={handleLayerToggle}
             />
             <label htmlFor="poi">Points of Interest</label>
+          </div>
+          <div className="control-item">
+            <input 
+              type="checkbox" 
+              id="voronoi"
+              name="voronoi"
+              checked={layerVisibility.voronoi || false}
+              onChange={handleLayerToggle}
+            />
+            <label htmlFor="voronoi">Territory Boundaries</label>
           </div>
         </div>
 

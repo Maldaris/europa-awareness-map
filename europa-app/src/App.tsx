@@ -26,9 +26,11 @@ interface SceneContentProps {
     equator: boolean;
     poles: boolean;
     poi: boolean;
+    voronoi: boolean;
   };
   isMarkerMode: boolean;
   onMarkerPlaced: (lat: number, long: number) => void;
+  voronoiOpacity: number;
 }
 
 // Memoized scene content
@@ -36,7 +38,8 @@ const SceneContent = memo(({
   europaSphereRef, 
   layerVisibility, 
   isMarkerMode, 
-  onMarkerPlaced 
+  onMarkerPlaced,
+  voronoiOpacity
 }: SceneContentProps) => (
   <>
     {/* Improved lighting setup */}
@@ -57,6 +60,7 @@ const SceneContent = memo(({
       layerVisibility={layerVisibility}
       isMarkerMode={isMarkerMode}
       onMarkerPlaced={onMarkerPlaced}
+      voronoiOpacity={voronoiOpacity}
     />
     <OrbitControls 
       enableZoom={true} 
@@ -73,13 +77,14 @@ const SceneContent = memo(({
 ));
 
 function App() {
-  // State for controlling layer visibility - all disabled by default for diagnosis
+  // State for controlling layer visibility
   const [layerVisibility, setLayerVisibility] = useState({
     gridLines: true,
     equator: true,
     poles: true,
     poi: true,
-    orientationMarkers: true
+    orientationMarkers: true,
+    voronoi: false // Add Voronoi layer, disabled by default
   });
   
   // State for marker creation mode
@@ -93,6 +98,9 @@ function App() {
   
   // State for modal visibility
   const [showModal, setShowModal] = useState(false);
+  
+  // State for Voronoi opacity
+  const [voronoiOpacity] = useState(0.1);
   
   // Effect to listen for marker-selected events - memoized with useCallback
   const handleMarkerSelected = useCallback((event: any) => {
@@ -182,10 +190,11 @@ function App() {
           layerVisibility={layerVisibility}
           isMarkerMode={isMarkerMode}
           onMarkerPlaced={handleMarkerPlaced}
+          voronoiOpacity={voronoiOpacity}
         />
       </MemoizedCanvas>
     </Suspense>
-  ), [layerVisibility, isMarkerMode, handleMarkerPlaced, canvasProps]);
+  ), [layerVisibility, isMarkerMode, handleMarkerPlaced, canvasProps, voronoiOpacity]);
 
   return (
     <POIProvider>

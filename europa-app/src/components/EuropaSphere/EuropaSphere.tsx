@@ -1,12 +1,11 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { RepeatWrapping } from 'three';
-import { Sphere, Billboard, Text } from '@react-three/drei';
+import { Sphere } from '@react-three/drei';
 import * as THREE from 'three';
 import { ThreeEvent } from '@react-three/fiber';
-import { latLongToVector3, vectorToLatLong } from './utils';
+import { vectorToLatLong } from './utils';
 import { usePOIs } from '../../context/POIContext';
-import { POI } from '../../types';
 
 // Import the extracted components
 import GridLines from './components/GridLines';
@@ -14,6 +13,7 @@ import POIMarker from './components/POIMarker';
 import PoleMarker from './components/PoleMarker';
 import Jupiter from './components/Jupiter';
 import Skybox from './components/Skybox';
+import VoronoiMaterial from './components/VoronoiMaterial';
 
 // Constants for marker scaling
 const MIN_MARKER_SIZE = 0.005;
@@ -28,23 +28,6 @@ const JUPITER_SCALE_FACTOR = 46;
 // For visualization, we'll use a scaled distance that works for the scene
 const JUPITER_DISTANCE = 100; // Scaled distance for visual purposes
 
-// Custom marker type
-interface CustomMarker {
-    id: string;
-    normalizedPosition: THREE.Vector3;
-    title: string;
-    description: string;
-}
-
-// Debounce helper function
-const debounce = <T extends (...args: any[]) => any>(fn: T, ms = 50) => {
-    let timeoutId: ReturnType<typeof setTimeout>;
-    return function (this: ThisParameterType<T>, ...args: Parameters<T>): void {
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => fn.apply(this, args), ms);
-    };
-};
-
 interface EuropaSphereProps {
     layerVisibility?: {
         gridLines: boolean;
@@ -52,10 +35,12 @@ interface EuropaSphereProps {
         poles: boolean;
         poi: boolean;
         orientationMarkers: boolean;
+        voronoi: boolean; // Add Voronoi diagram layer visibility
     };
     isMarkerMode?: boolean;
     onMarkerPlaced?: (lat: number, long: number) => void;
     terrainHeight?: number; // Control the terrain elevation scale
+    voronoiOpacity?: number; // Control the opacity of the Voronoi diagram
 }
 
 // Main Europa Sphere Component
@@ -63,13 +48,22 @@ const EuropaSphere = React.forwardRef<
     { addMarker: (lat: number, long: number, title: string, description: string, category: string) => void },
     EuropaSphereProps
 >(({
-    layerVisibility = { gridLines: true, equator: true, poles: true, poi: true, orientationMarkers: true },
+    layerVisibility = { 
+        gridLines: true, 
+        equator: true, 
+        poles: true, 
+        poi: true, 
+        orientationMarkers: true,
+        voronoi: false 
+    },
     isMarkerMode = false,
     onMarkerPlaced,
-    terrainHeight = 0.5
+    terrainHeight = 0.5,
+    voronoiOpacity = 0.3
 }, ref) => {
     // Reference to the mesh for animations and raycasting
     const meshRef = useRef<THREE.Mesh>(null);
+    const materialRef = useRef<THREE.MeshStandardMaterial>(null);
     const radius = 1;
     
     // Access the POI context
@@ -84,9 +78,6 @@ const EuropaSphere = React.forwardRef<
 
     // State to track intersection point
     const [intersectionPoint, setIntersectionPoint] = useState<THREE.Vector3 | null>(null);
-
-    // State for custom markers
-    const [customMarkers, setCustomMarkers] = useState<CustomMarker[]>([]);
 
     const canvasDomElement = useRef<HTMLCanvasElement | null>(null);
 
@@ -140,8 +131,6 @@ const EuropaSphere = React.forwardRef<
         if (!meshRef.current) return null;
         
         // Get the canvas dimensions
-
-
         if (!canvasDomElement.current) return null;
         
         const canvas = canvasDomElement.current;
@@ -276,6 +265,7 @@ const EuropaSphere = React.forwardRef<
     useEffect(() => {
         setDisplacementScale(terrainHeight);
     }, [terrainHeight]);
+    
     // Calculate marker scale based on camera distance to center of sphere
     useFrame(({ camera }) => {
         if (!meshRef.current) return;
@@ -349,17 +339,27 @@ const EuropaSphere = React.forwardRef<
                     onPointerDown={handlePointerDown}
                 >
                     <Sphere args={[radius, 64, 32]}>
-                        <meshStandardMaterial
-                            map={textures.colorTex}
-                            metalness={0.2}
-                            roughness={0.8}
-                            emissive="#444444"
-                            emissiveIntensity={0.1}
-                            displacementMap={textures.heightmapTex}
-                            displacementScale={displacementScale}
-                            bumpMap={textures.heightmapTex}
-                            bumpScale={0.05}
-                        />
+                        {layerVisibility.voronoi ? (
+                            <VoronoiMaterial
+                                pois={pois}
+                                baseTexture={textures.colorTex}
+                                opacity={voronoiOpacity}
+                                visible={layerVisibility.voronoi}
+                            />
+                        ) : (
+                            <meshStandardMaterial
+                                ref={materialRef}
+                                map={textures.colorTex}
+                                metalness={0.2}
+                                roughness={0.8}
+                                emissive="#444444"
+                                emissiveIntensity={0.1}
+                                displacementMap={textures.heightmapTex}
+                                displacementScale={displacementScale}
+                                bumpMap={textures.heightmapTex}
+                                bumpScale={0.05}
+                            />
+                        )}
                     </Sphere>
 
                     {/* Only render grid lines if visible */}
@@ -402,22 +402,6 @@ const EuropaSphere = React.forwardRef<
                             />
                         ))
                     }
-
-                    {/* User created custom markers */}
-                    {customMarkers.map(marker => (
-                        <POIMarker
-                            key={marker.id}
-                            directionVector={marker.normalizedPosition}
-                            label={{
-                                title: marker.title,
-                                description: marker.description
-                            }}
-                            category="custom"
-                            sphereRef={meshRef as any}
-                            scale={markerScale}
-                            radius={radius}
-                        />
-                    ))}
 
                     {/* Intersection point indicator - only show when in marker placement mode */}
                     {intersectionPoint && isMarkerMode && (

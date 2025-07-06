@@ -112,8 +112,233 @@
       "lat": 45,
       "lng": 0,
       "type": "orientation"
+    },
+    {
+      "id": "st-1",
+      "type": "poi",
+      "title": "Northern Plains",
+      "lat": 78.4,
+      "lng": 15.3,
+      "category": "terrain",
+      "description": "Vast icy plains in Europa's northern region"
+    },
+    {
+      "id": "st-2",
+      "type": "poi",
+      "title": "Southern Crater Field",
+      "lat": -65.1,
+      "lng": -120.8,
+      "category": "impact",
+      "description": "Dense cluster of impact craters near the south pole"
+    },
+    {
+      "id": "st-3",
+      "type": "poi",
+      "title": "Eastern Ridge",
+      "lat": 12.3,
+      "lng": 145.7,
+      "category": "landmark",
+      "description": "Prominent ridge formation"
+    },
+    {
+      "id": "st-4",
+      "type": "poi",
+      "title": "Western Chaos",
+      "lat": 8.9,
+      "lng": -168.2,
+      "category": "terrain",
+      "description": "Disrupted terrain showing chaotic features"
+    },
+    {
+      "id": "st-5",
+      "type": "poi",
+      "title": "Equatorial Canyon",
+      "lat": 0.5,
+      "lng": 75.3,
+      "category": "landmark",
+      "description": "Deep canyon along the equator"
+    },
+    {
+      "id": "st-6",
+      "type": "poi",
+      "title": "Impact Alpha",
+      "lat": 45.2,
+      "lng": -45.6,
+      "category": "impact",
+      "description": "Large impact feature with distinctive rays"
+    },
+    {
+      "id": "st-7",
+      "type": "poi",
+      "title": "Navigation Point Beta",
+      "lat": -32.8,
+      "lng": 22.4,
+      "category": "navigation",
+      "description": "Key navigational marker in southern hemisphere"
+    },
+    {
+      "id": "st-8",
+      "type": "poi",
+      "title": "Thermal Vent Gamma",
+      "lat": 15.3,
+      "lng": -85.9,
+      "category": "active region",
+      "description": "Active thermal region with potential subsurface connection"
+    },
+    {
+      "id": "st-9",
+      "type": "poi",
+      "title": "Orientation Marker Delta",
+      "lat": -56.7,
+      "lng": 110.1,
+      "category": "orientation",
+      "description": "Surface feature used for terrain orientation"
+    },
+    {
+      "id": "st-10",
+      "type": "poi",
+      "title": "Chaos Zone Epsilon",
+      "lat": 22.5,
+      "lng": -170.3,
+      "category": "terrain",
+      "description": "Chaotic terrain with broken ice blocks"
+    },
+    {
+      "id": "st-11",
+      "type": "poi",
+      "title": "Prime Meridian Marker",
+      "lat": 0.0,
+      "lng": 0.0,
+      "category": "navigation",
+      "description": "Reference point for Europa coordinate system"
+    },
+    {
+      "id": "st-12",
+      "type": "poi",
+      "title": "Subterranean Activity Zeta",
+      "lat": -25.6,
+      "lng": -65.2,
+      "category": "active region",
+      "description": "Region with evidence of subsurface water movement"
+    },
+    {
+      "id": "st-13",
+      "type": "poi",
+      "title": "Linear Feature Eta",
+      "lat": 38.9,
+      "lng": 125.7,
+      "category": "landmark",
+      "description": "Extensive linear crack in the ice crust"
+    },
+    {
+      "id": "st-14",
+      "type": "poi",
+      "title": "Polar Cap Theta",
+      "lat": 89.5,
+      "lng": -120.0,
+      "category": "terrain",
+      "description": "Distinctive ice formation at the north pole"
+    },
+    {
+      "id": "st-15",
+      "type": "poi",
+      "title": "Ancient Impact Iota",
+      "lat": -15.2,
+      "lng": 37.8,
+      "category": "impact",
+      "description": "Heavily eroded impact crater"
+    },
+    {
+      "id": "st-16",
+      "type": "poi",
+      "title": "Triple Junction Kappa",
+      "lat": 5.3,
+      "lng": -28.6,
+      "category": "landmark",
+      "description": "Point where three major cracks intersect"
+    },
+    {
+      "id": "st-17",
+      "type": "poi",
+      "title": "Bright Deposit Lambda",
+      "lat": -42.1,
+      "lng": 155.0,
+      "category": "terrain",
+      "description": "Area with unusually bright surface material"
+    },
+    {
+      "id": "st-18",
+      "type": "poi",
+      "title": "Dark Line Mu",
+      "lat": 28.4,
+      "lng": -95.3,
+      "category": "landmark",
+      "description": "Dark linear feature possibly indicating recent activity"
+    },
+    {
+      "id": "st-19",
+      "type": "poi",
+      "title": "Orientation Marker Nu",
+      "lat": 60.7,
+      "lng": 85.9,
+      "category": "orientation",
+      "description": "Secondary orientation marker in northern hemisphere"
+    },
+    {
+      "id": "st-20",
+      "type": "poi",
+      "title": "Chaos Boundary Xi",
+      "lat": -33.8,
+      "lng": -150.2,
+      "category": "terrain",
+      "description": "Transition zone between smooth and chaotic terrain"
+    },
+    {
+      "id": "st-21",
+      "type": "poi",
+      "title": "Double Impact Omicron",
+      "lat": 55.9,
+      "lng": -15.7,
+      "category": "impact",
+      "description": "Pair of overlapping impact craters"
+    },
+    {
+      "id": "st-22",
+      "type": "custom",
+      "title": "Research Site Pi",
+      "lat": -18.3,
+      "lng": 59.2,
+      "category": "custom",
+      "description": "Location for proposed future research station"
+    },
+    {
+      "id": "st-23",
+      "type": "poi",
+      "title": "Potential Plume Rho",
+      "lat": 10.1,
+      "lng": -52.8,
+      "category": "active region",
+      "description": "Site with evidence of possible water vapor emissions"
+    },
+    {
+      "id": "st-24",
+      "type": "poi",
+      "title": "Navigation Point Sigma",
+      "lat": -75.0,
+      "lng": 5.5,
+      "category": "navigation",
+      "description": "Southern navigation reference point"
+    },
+    {
+      "id": "st-25",
+      "type": "poi",
+      "title": "Ice Ridge Tau",
+      "lat": 35.4,
+      "lng": 178.9,
+      "category": "landmark",
+      "description": "Prominent ice ridge with unusual morphology"
     }
   ],
   "version": "1.0.0",
   "lastUpdated": "2025-04-21"
-} 
+}
